@@ -268,10 +268,14 @@ class HQA(pl.LightningModule):
         lr=4e-4,
         decay=True,
         clip_grads=False,
-        codebook_init='normal'        
+        codebook_init='normal',
+        KL_coeff = 0.2,
+        CL_coeff = 0.0005
+
     ):
         super().__init__()
         self.save_hyperparameters(ignore=['prev_model'])
+        
         self.prev_model = prev_model
         self.encoder = Encoder(input_feat_dim, codebook_dim, enc_hidden_dim, num_res_blocks=num_res_blocks)
         self.codebook = VQCodebook(codebook_slots, codebook_dim, gs_temp)
@@ -288,10 +292,11 @@ class HQA(pl.LightningModule):
         self.lr = lr
         self.decay = decay
         self.clip_grads = clip_grads
-
+        torch.set_default_dtype(torch.float32)
         # Tells pytorch lightinig to use our custom training loop
         self.automatic_optimization = False
-        
+        self.KL_coeff = torch.tensor(KL_coeff,device = 'cuda')
+        self.CL_coeff = torch.tensor(CL_coeff,device = 'cuda')
         self.init_codebook(codebook_init)       
     
     @torch.no_grad()
@@ -315,18 +320,21 @@ class HQA(pl.LightningModule):
         self.code_count = torch.zeros(self.codebook.codebook_slots, device=self.device, dtype=torch.float64)
     
     def get_training_loss(self, x):
+
         recon, recon_test, _, _, indices, KL, commit_loss = self(x)
         recon_loss = self.recon_loss(self.encode_lower(x), recon)
         dims = np.prod(recon.shape[1:]) # orig_w * orig_h * num_channels
-        loss = recon_loss/dims + 0.2*KL/dims + 0.0005*(commit_loss)/dims
-        return loss, indices, KL, commit_loss
+        loss = recon_loss/dims + self.KL_coeff*KL/dims + self.CL_coeff*((commit_loss)/dims)
+        return loss, indices, KL, commit_loss, recon_loss
     
     def get_validation_loss(self, x):
+        
         recon, recon_test, _, _, indices, KL, commit_loss = self(x, soft=False)
         recon_loss = self.recon_loss(self.encode_lower(x), recon)
         dims = np.prod(recon.shape[1:]) # orig_w * orig_h * num_channels
-        loss = recon_loss/dims + 0.2*KL/dims + 0.005*(commit_loss)/dims
-        return loss, indices, KL, commit_loss    
+        
+        loss = recon_loss/dims + self.KL_coeff*KL/dims + self.CL_coeff*((commit_loss)/dims)
+        return loss, indices, KL, commit_loss,recon_loss
 
     def recon_loss(self, orig, recon):
         return F.mse_loss(orig, recon, reduction='none').sum(dim=(1,2)).mean()
@@ -347,7 +355,7 @@ class HQA(pl.LightningModule):
         optimizer = self.optimizers()
         scheduler = self.lr_schedulers()
     
-        loss, indices, kl_loss, commit_loss = self.get_training_loss(x)
+        loss, indices, kl_loss, commit_loss, recon_loss = self.get_training_loss(x)
     
         optimizer.zero_grad()
         
@@ -379,6 +387,8 @@ class HQA(pl.LightningModule):
         self.log("loss", loss, prog_bar=True)
         self.log("kl", kl_loss, prog_bar=True)
         self.log("commit", commit_loss, prog_bar=True)
+        self.log("recon", recon_loss, prog_bar=True)
+        
         return loss
     
     # def training_step(self,batch, batch_idx):
@@ -427,18 +437,20 @@ class HQA(pl.LightningModule):
 
     def validation_step(self, val_batch, batch_idx):
         x,_ = val_batch
-        loss, indices, kl_loss, commit_loss = self.get_validation_loss(x)
+        loss, indices, kl_loss, commit_loss,recon_loss = self.get_validation_loss(x)
         self.log("val_loss", loss, prog_bar=False)
         self.log("val_kl", kl_loss, prog_bar=False)
         self.log("val_commit", commit_loss, prog_bar=False)
+        self.log("val_recon_loss", recon_loss, prog_bar=False)
         return loss
     
     def test_step(self, test_batch, batch_idx):
         x,_ = test_batch
-        loss, indices, kl_loss, commit_loss = self.get_validation_loss(x)
+        loss, indices, kl_loss, commit_loss,recon_loss = self.get_validation_loss(x)
         self.log("tst_loss", loss, prog_bar=False)
         self.log("tst_kl", kl_loss, prog_bar=False)
         self.log("tst_commit", commit_loss, prog_bar=False)
+        self.log("tst_recon_loss", recon_loss, prog_bar=False)
         return loss    
 
     
@@ -533,7 +545,7 @@ class HQA(pl.LightningModule):
     def init_bottom(cls, input_feat_dim, **kwargs):
         model = HQA(input_feat_dim,prev_model=None, **kwargs)
         return model
-
+'''
 if __name__ == '__main__':
     torch.set_float32_matmul_precision('medium')
     transform = transforms.Compose(
@@ -571,3 +583,4 @@ if __name__ == '__main__':
         trainer.fit(model=hqa, train_dataloaders=dl_train)
 
         hqa_prev = hqa
+'''
