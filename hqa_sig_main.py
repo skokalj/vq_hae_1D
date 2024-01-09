@@ -14,7 +14,7 @@ import torchsig.transforms as ST
 import lightning.pytorch as pl
 from lightning.pytorch.loggers import TensorBoardLogger
 from lightning.pytorch.strategies.ddp import DDPStrategy
-from hqa_lightning2 import HQA
+from hqa_lightning_1D import HQA
 
 from scipy import interpolate
 from scipy import signal as sp
@@ -32,9 +32,9 @@ if __name__ == '__main__':
     valid_samples_per_class = 1000
     test_samples_per_class = 1000
     num_workers=15
-    EPOCHS=30
+    EPOCHS=1
     num_iq_samples = 4096
-    layers = 3
+    layers = 5
     num_res_blocks = 2
     KL_coeff = 0.001,
     CL_coeff = 0.001,
@@ -108,6 +108,8 @@ if __name__ == '__main__':
     model_save_path=os.path.join('Saved_models', f"HQA_Sig_1D_iq{num_iq_samples}_{layers}layer_res{num_res_blocks}_KL{KL_coeff}_C{CL_coeff}_Classes6_e{EPOCHS}.ckpt")
     
     for i in range(layers): #changed from five for  faster evaluation
+        print(f'training Layer {i}')
+        print('==============================================')
         if i == 0:
             hqa = HQA.init_bottom(
                 input_feat_dim=2,
@@ -130,20 +132,21 @@ if __name__ == '__main__':
         logger = TensorBoardLogger("tb_logs/HQA_1D", name=f"HQA_Sig_1D_iq{num_iq_samples}_{i}th_layer_res{num_res_blocks}_KL{KL_coeff}_C{CL_coeff}_Classes6_e{EPOCHS}")
 
         trainer = pl.Trainer(max_epochs=EPOCHS, 
-             logger=logger,  
+             logger=None,  
              devices=[0],
              accelerator = 'gpu',
-             num_sanity_val_steps=2
+             num_sanity_val_steps=0
         )
 
         #trainer.fit(model=hqa, train_dataloaders=dl_train, val_loaders=dl_val)
         trainer.fit(hqa.double(), dl_train, dl_val)
         hqa_prev = hqa
         torch.save(hqa, model_save_path)  
-  
+        print('saved the model as model_save_path')
+        print('==========================================')
     hqa_model = torch.load(model_save_path)
 
-    for i in range(2): #changed from five for  faster evaluation
+    for i in range(layers): #changed from five for  faster evaluation
         hqa=hqa_model[i]
         test_x, lab = next(iter(dl_test))
         hqa.eval()

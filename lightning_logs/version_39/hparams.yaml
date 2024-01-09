@@ -1,0 +1,15 @@
+input_feat_dim: 256
+codebook_slots: 256
+codebook_dim: 256
+enc_hidden_dim: 16
+dec_hidden_dim: 64
+gs_temp: 0.667
+num_res_blocks: 2
+lr: 0.0004
+decay: true
+clip_grads: false
+codebook_init: normal
+KL_coeff:
+- 0.001
+CL_coeff:
+- 0.001
