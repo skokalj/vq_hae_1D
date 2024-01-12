@@ -113,7 +113,7 @@ test_dataloader = DataLoader(
     shuffle=False,
     drop_last=True,
 )
-torch.set_default_dtype(torch.float64)
+torch.set_default_dtype(torch.float32)
 model_save_path=os.path.join("tb_logs", f"EfficientNet_Classes6_e{EPOCHS}.pt")
    
 
@@ -194,10 +194,11 @@ checkpoint_callback = ModelCheckpoint(
     monitor="val_loss",
     mode="min",
 )
+logger = TensorBoardLogger('tb_logs/efficientNet',name=f'efficientNet_1D_{EPOCHS}')
 
 # Create and fit trainer
 trainer = Trainer(
-    max_epochs=EPOCHS, callbacks=checkpoint_callback, devices=1, accelerator="gpu"
+    max_epochs=EPOCHS, callbacks=checkpoint_callback, devices=1, accelerator="gpu",logger=None
 )
 trainer.fit(example_model, train_dataloader, val_dataloader) 
 

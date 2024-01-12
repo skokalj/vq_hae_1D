@@ -3,6 +3,8 @@ import math
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
+import seaborn as sns
 
 import torch
 import torch.nn.functional as F
@@ -19,6 +21,7 @@ import lightning.pytorch as pl
 from lightning.pytorch.loggers import TensorBoardLogger
 from torch.nn import GELU
 from utils import *
+from sklearn.manifold import TSNE
 
 
 def mish(x):
@@ -255,6 +258,8 @@ class GlobalNormalization1(torch.nn.Module):
 
 
 class HQA(pl.LightningModule):
+    VISUALIZATION_DIR = 'vis'
+    SUBDIRS=[VISUALIZATION_DIR]
     def __init__(
         self,
         input_feat_dim,
@@ -269,13 +274,15 @@ class HQA(pl.LightningModule):
         decay=True,
         clip_grads=False,
         codebook_init='normal',
+        output_dir = "CodeCos2R",
+        layer = 0 ,
         KL_coeff = 0.2,
-        CL_coeff = 0.0005
+        CL_coeff = 0.001,
+        Cos_coeff = 0.7,
 
     ):
         super().__init__()
         self.save_hyperparameters(ignore=['prev_model'])
-        
         self.prev_model = prev_model
         self.encoder = Encoder(input_feat_dim, codebook_dim, enc_hidden_dim, num_res_blocks=num_res_blocks)
         self.codebook = VQCodebook(codebook_slots, codebook_dim, gs_temp)
@@ -292,12 +299,28 @@ class HQA(pl.LightningModule):
         self.lr = lr
         self.decay = decay
         self.clip_grads = clip_grads
-        torch.set_default_dtype(torch.float32)
-        # Tells pytorch lightinig to use our custom training loop
-        self.automatic_optimization = False
+        self.layer = layer
         self.KL_coeff = torch.tensor(KL_coeff,device = 'cuda')
         self.CL_coeff = torch.tensor(CL_coeff,device = 'cuda')
-        self.init_codebook(codebook_init)       
+        self.Cos_coeff = torch.tensor(Cos_coeff,device = 'cuda')
+        torch.set_default_dtype(torch.float32)
+
+        # Tells pytorch lightinig to use our custom training loop
+        self.automatic_optimization = False
+        
+        self.init_codebook(codebook_init)
+        self.create_output = output_dir is not None 
+        if self.create_output:
+            self.output_dir = output_dir
+            try:
+                os.mkdir(output_dir)
+                for subdir in HQA.SUBDIRS:
+                    path = f'{output_dir}/{subdir}'
+                    os.mkdir(path)
+                    print(path)
+                    os.mkdir(f'{path}/layer{len(self)}')
+            except OSError:
+                pass    
     
     @torch.no_grad()
     def init_codebook(self, codebook_init):
@@ -318,23 +341,39 @@ class HQA(pl.LightningModule):
     
     def on_train_start(self):
         self.code_count = torch.zeros(self.codebook.codebook_slots, device=self.device, dtype=torch.float64)
+        self.codebook_resets = 0
     
-    def get_training_loss(self, x):
+    def cos_loss(self,x):
+        z_e_lower = self.encode_lower(x)
+        z_e = self.encoder(z_e_lower)
+        z_q, indices, kl, commit_loss = self.codebook(z_e)
+        z_e_lower_tilde = self.decoder(z_q)
+        cos_loss=torch.max(1-F.cosine_similarity(z_e_lower, z_e_lower_tilde, dim = 1),torch.zeros(z_e_lower.shape[0], z_e_lower.shape[2], device=self.device)).sum(dim=1).mean()
+        return cos_loss
 
-        recon, recon_test, _, _, indices, KL, commit_loss = self(x)
+    def val_cos_loss(self,x):
+        z_e_lower_tilde, z_e_lower, z_q, z_e, indices, kl, commit_los =self(x, soft=False)
+        cos_loss=torch.max(1-F.cosine_similarity(z_e_lower, z_e_lower_tilde, dim = 1),torch.zeros(z_e_lower.shape[0], z_e_lower.shape[2], device=self.device)).sum(dim=1).mean()
+        return cos_loss
+
+
+    def get_training_loss(self, x):
+        recon, recon_test, lll, _, indices, KL, commit_loss = self(x)
+        #import ipdb; ipdb.set_trace()
         recon_loss = self.recon_loss(self.encode_lower(x), recon)
+        cos_loss = self.cos_loss(x)
         dims = np.prod(recon.shape[1:]) # orig_w * orig_h * num_channels
-        loss = recon_loss/dims + self.KL_coeff*KL/dims + self.CL_coeff*((commit_loss)/dims)
-        return loss, indices, KL, commit_loss, recon_loss
+        #loss = recon_loss/dims + 0.001*KL/dims + 0.001*(commit_loss)/dims
+        loss = self.Cos_coeff*cos_loss/dims + recon_loss/dims + self.KL_coeff*KL/dims + self.CL_coeff*(commit_loss)/dims
+        return cos_loss, recon_loss, loss, indices, KL, commit_loss
     
     def get_validation_loss(self, x):
-        
         recon, recon_test, _, _, indices, KL, commit_loss = self(x, soft=False)
         recon_loss = self.recon_loss(self.encode_lower(x), recon)
+        val_cos_loss = self.val_cos_loss(x)
         dims = np.prod(recon.shape[1:]) # orig_w * orig_h * num_channels
-        
-        loss = recon_loss/dims + self.KL_coeff*KL/dims + self.CL_coeff*((commit_loss)/dims)
-        return loss, indices, KL, commit_loss,recon_loss
+        loss = self.Cos_coeff*val_cos_loss/dims + recon_loss/dims + self.KL_coeff*KL/dims + self.CL_coeff*(commit_loss)/dims
+        return val_cos_loss, recon_loss, loss, indices, KL, commit_loss    
 
     def recon_loss(self, orig, recon):
         return F.mse_loss(orig, recon, reduction='none').sum(dim=(1,2)).mean()
@@ -355,7 +394,7 @@ class HQA(pl.LightningModule):
         optimizer = self.optimizers()
         scheduler = self.lr_schedulers()
     
-        loss, indices, kl_loss, commit_loss, recon_loss = self.get_training_loss(x)
+        cos_loss, recon_loss, loss, indices, kl_loss, commit_loss = self.get_training_loss(x)
     
         optimizer.zero_grad()
         
@@ -371,86 +410,76 @@ class HQA(pl.LightningModule):
         self.code_count = self.code_count + indices_onehot.sum(dim=(0, 1))
 
         
-        if batch_idx > 0 and batch_idx % 40 == 0:
-            with torch.no_grad():
-                
-                max_count, most_used_code = torch.max(self.code_count, dim=0)
-                frac_usage = self.code_count / max_count
-                z_q_most_used = self.codebook.lookup(most_used_code.view(1, 1)).squeeze()
-                min_frac_usage, min_used_code = torch.min(frac_usage, dim=0)
-                if min_frac_usage < 0.03:
-                    print(f'reset code {min_used_code}')
-                    moved_code = z_q_most_used + torch.randn_like(z_q_most_used) / 100
-                    self.codebook.codebook.weight.data[min_used_code] = moved_code
-                self.code_count = torch.zeros_like(self.code_count, device=self.device)
+        if batch_idx > 0 and batch_idx % 25 == 0:
+            self.reset_least_used_codeword()
+            if self.create_output and self.codebook_resets % 30 == 0:
+                tsne = self.visualize_codebook()
+                df = pd.DataFrame(tsne,
+                    columns=['tsne-2d-one', 'tsne-2d-two'])
+                y = [i for i in range(len(df))]
+
+                plt.figure(figsize=(16,10))
+                scplot=sns.scatterplot(
+                    x="tsne-2d-one", y="tsne-2d-two",
+                    hue=y,
+                    palette=sns.color_palette("hls", 10),
+                    data=df,
+                    legend=False,
+                    alpha=0.3,
+                    s=20
+                )
+                fig = scplot.get_figure()
+                fig.savefig(f'{self.output_dir}/{HQA.VISUALIZATION_DIR}/layer{len(self)}/reset{self.codebook_resets}.png')
+
+
     
         self.log("loss", loss, prog_bar=True)
+        self.log("cos_loss", cos_loss, prog_bar=True)
+        self.log("recon", recon_loss, prog_bar=True)
         self.log("kl", kl_loss, prog_bar=True)
         self.log("commit", commit_loss, prog_bar=True)
-        self.log("recon", recon_loss, prog_bar=True)
-        
         return loss
+
+
+    def visualize_codebook(self):
+        """ Perform t-SNE visualization on the VQ-Codebook """
+        latents = self.codebook.codebook.weight.data.detach().cpu().numpy()
+        tsne = TSNE(n_components=2)
+        latents_tsne = tsne.fit_transform(latents)
+        return latents_tsne
+
+    @torch.no_grad()
+    def reset_least_used_codeword(self):
+        max_count, most_used_code = torch.max(self.code_count, dim=0)
+        frac_usage = self.code_count / max_count
+        z_q_most_used = self.codebook.lookup(most_used_code.view(1, 1)).squeeze()
+        min_frac_usage, min_used_code = torch.min(frac_usage, dim=0)
+        if min_frac_usage < 0.03:
+            #print(f'reset code {min_used_code}')
+            moved_code = z_q_most_used + torch.randn_like(z_q_most_used) / 100
+            self.codebook.codebook.weight.data[min_used_code] = moved_code
+        self.code_count = torch.zeros_like(self.code_count, device=self.device)
+        self.codebook_resets += 1    
     
-    # def training_step(self,batch, batch_idx):
-    #     '''
-    #     if decay is True:
-    #             self.codebook.temperature = decay_temp_linear(batch_idx+1, total_steps, temp_base, temp_min=0.001)
-    #     '''
-    #     x,_ = batch
-    #     z_e_lower = self.encode_lower(x)
-    #     z_e = self.encoder(z_e_lower)
-    #     z_q, indices, kl, commit_loss = self.codebook(z_e)
-    #     z_e_lower_tilde = self.decoder(z_q)
-    #     recon_loss1=torch.max(1-F.cosine_similarity(z_e_lower, z_e_lower_tilde, dim = 1),torch.zeros(z_e_lower.shape[0], z_e_lower.shape[2]).to(device)).sum(dim=(0,1))
-    #     #recon_loss=F.cosine_similarity(z_e_lower, z_e_lower_tilde, dim = 0).sum(dim=(0,1))
-    #     #recon_loss = F.huber_loss(z_e_lower, z_e_lower_tilde, reduction='none').sum(dim=(1,2)).mean()
-    #     recon_loss2 = F.mse_loss(z_e_lower, z_e_lower_tilde, reduction='none').sum(dim=(1,2)).mean()
-        
-    #     dims = np.prod(z_e_lower_tilde.shape[1:])
-    #     rdims= z_e_lower_tilde.shape[0]*z_e_lower_tilde.shape[2]
-    #     loss = 0.3*recon_loss1/rdims +0.7*recon_loss2/dims  + 0.0005*kl/dims + 0.0005*(commit_loss)/dims
-    #     #loss = recon_loss2/dims  + 0.001*kl/dims + 0.001*(commit_loss)/dims
-    #     ## this below was with cosine recon
-    #     #loss = recon_loss/rdims + 0.5*kl/dims + 0.001*(commit_loss)/dims
-    #     self.log("mseloss", recon_loss2, prog_bar=True)
-    #     self.log("cosloss", recon_loss1, prog_bar=True)
-    #     self.log("loss", loss, prog_bar=True)
-    #         # code reset every 20 steps
-    #     indices_onehot = F.one_hot(indices, num_classes=self.codebook.codebook_slots).float()
-    #     self.code_count = self.code_count + indices_onehot.sum(dim=(0, 1, 2))
-    #     if batch_idx % 20 == 0:
-    #         with torch.no_grad():
-    #             max_count, most_used_code = torch.max(self.code_count, dim=0)
-    #             frac_usage = self.code_count / max_count
-    #             import ipdb; ipdb.set_trace()
-    #             z_q_most_used = self.codebook.lookup(most_used_code.view(1, 1)).squeeze()
-
-    #             min_frac_usage, min_used_code = torch.min(frac_usage, dim=0)
-    #             if min_frac_usage < 0.03:
-    #                 print(f'reset code {min_used_code}')
-    #                 moved_code = z_q_most_used + torch.randn_like(z_q_most_used) / 100
-    #                 self.codebook.codebook[min_used_code] = moved_code
-    #             self.code_count = torch.zeros_like(self.code_count)
-
-        
-    #     return loss
 
     def validation_step(self, val_batch, batch_idx):
         x,_ = val_batch
-        loss, indices, kl_loss, commit_loss,recon_loss = self.get_validation_loss(x)
-        self.log("val_loss", loss, prog_bar=False)
-        self.log("val_kl", kl_loss, prog_bar=False)
-        self.log("val_commit", commit_loss, prog_bar=False)
-        self.log("val_recon_loss", recon_loss, prog_bar=False)
+        cos_loss, recon_loss, loss, indices, kl_loss, commit_loss = self.get_validation_loss(x)
+        self.log("val_loss", loss, prog_bar=False, sync_dist=True)
+        self.log("val_cos_loss", cos_loss, prog_bar=False,sync_dist=True)
+        self.log("val_recon", recon_loss, prog_bar=False, sync_dist=True)
+        self.log("val_kl", kl_loss, prog_bar=False,  sync_dist=True)
+        self.log("val_commit", commit_loss, prog_bar=False,sync_dist=True)
         return loss
     
     def test_step(self, test_batch, batch_idx):
         x,_ = test_batch
-        loss, indices, kl_loss, commit_loss,recon_loss = self.get_validation_loss(x)
+        cos_loss, recon_loss, loss, indices, kl_loss, commit_loss = self.get_validation_loss(x)
         self.log("tst_loss", loss, prog_bar=False)
+        self.log("tst_cos_loss", cos_loss, prog_bar=False)
+        self.log("tst_recon", recon_loss, prog_bar=False)
         self.log("tst_kl", kl_loss, prog_bar=False)
         self.log("tst_commit", commit_loss, prog_bar=False)
-        self.log("tst_recon_loss", recon_loss, prog_bar=False)
         return loss    
 
     
@@ -486,8 +515,6 @@ class HQA(pl.LightningModule):
                 recon = self.decode_lower(z_q_lower_tilde)
             else:
                 recon = self.decoder(z_q)
-                #if self.signal_input:
-                recon = torch.reshape(recon, (-1, self.out_feat_dim, 4096))
         return recon
 
     def quantize(self, z_e):
@@ -545,42 +572,4 @@ class HQA(pl.LightningModule):
     def init_bottom(cls, input_feat_dim, **kwargs):
         model = HQA(input_feat_dim,prev_model=None, **kwargs)
         return model
-'''
-if __name__ == '__main__':
-    torch.set_float32_matmul_precision('medium')
-    transform = transforms.Compose(
-        [
-            transforms.Resize(32),
-            transforms.CenterCrop(32),
-            transforms.ToTensor(),
-        ]
-    )
-    batch_size = 512
-    ds_train = MNIST('/tmp/mnist', download=True, transform=transform)
-    dl_train = DataLoader(ds_train, batch_size=batch_size, shuffle=True, num_workers=4)
 
-    ds_test = MNIST('/tmp/mnist_test_', download=True, train=False, transform=transform)
-    dl_test = DataLoader(ds_test, batch_size=batch_size, num_workers=4)
-
-    enc_hidden_sizes = [16, 16, 32, 64, 128]
-    dec_hidden_sizes = [16, 64, 256, 512, 1024]
-    
-    for i in range(5):
-        if i == 0:
-            hqa = HQA.init_bottom(
-                input_feat_dim=2,
-                enc_hidden_dim=enc_hidden_sizes[i],
-                dec_hidden_dim=dec_hidden_sizes[i],
-            )
-        else:
-            hqa = HQA.init_higher(
-                hqa_prev,
-                enc_hidden_dim=enc_hidden_sizes[i],
-                dec_hidden_dim=dec_hidden_sizes[i],
-            )
-        logger = TensorBoardLogger("tb_logs", name="HQA_Mnist")
-        trainer = pl.Trainer(max_epochs=100, logger=logger)
-        trainer.fit(model=hqa, train_dataloaders=dl_train)
-
-        hqa_prev = hqa
-'''
