@@ -14,7 +14,7 @@ import torchsig.transforms as ST
 import lightning.pytorch as pl
 from lightning.pytorch.loggers import TensorBoardLogger
 from lightning.pytorch.strategies.ddp import DDPStrategy
-from hqa_lightning2 import HQA
+from hqa_lightning_1D import HQA
 
 from scipy import interpolate
 from scipy import signal as sp
@@ -24,14 +24,24 @@ from scipy import signal as sp
 
 if __name__ == '__main__':
     #torch.set_float32_matmul_precision('medium')
+    torch.set_default_dtype(torch.float32)
     #classes = ["bpsk","8pam","8psk","16qam","16pam","64qam","64psk","256qam","1024qam","16gmsk"]
     classes = ["4ask","8pam","16psk","32qam_cross","2fsk","ofdm-256"]
     num_classes = len(classes)
     training_samples_per_class = 4000
     valid_samples_per_class = 1000
     test_samples_per_class = 1000
-    num_workers=32
-    EPOCHS=30
+    num_workers=15
+    EPOCHS=10
+    num_iq_samples = 4096
+    layers = 5
+    num_res_blocks = 2
+    KL_coeff =  0.2
+    CL_coeff = 0.001
+    Cos_coeff = 0.7
+    torch.set_default_dtype(torch.float64)
+    batch_size = 32
+
 
     data_transform = ST.Compose([
         ST.Normalize(norm=np.inf),
@@ -44,7 +54,7 @@ if __name__ == '__main__':
         classes=classes,
         use_class_idx=True,
         level=0,
-        num_iq_samples=4096,
+        num_iq_samples=num_iq_samples,
         num_samples=int(num_classes*training_samples_per_class),
         include_snr=False,
         transform = data_transform
@@ -54,7 +64,7 @@ if __name__ == '__main__':
         classes=classes,
         use_class_idx=True,
         level=0,
-        num_iq_samples=4096,
+        num_iq_samples=num_iq_samples,
         num_samples=int(num_classes*valid_samples_per_class),
         include_snr=False,
         transform = data_transform
@@ -64,7 +74,7 @@ if __name__ == '__main__':
         classes=classes,
         use_class_idx=True,
         level=0,
-        num_iq_samples=4096,
+        num_iq_samples=num_iq_samples,
         num_samples=int(num_classes*test_samples_per_class),
         include_snr=False,
         transform = data_transform
@@ -72,66 +82,74 @@ if __name__ == '__main__':
 
     dl_train = DataLoader(
         dataset=ds_train,
-        batch_size=64,
-        num_workers=num_workers,
+        batch_size=batch_size,
+        #num_workers=num_workers,
         shuffle=True,
         drop_last=True,
     )
 
     dl_val = DataLoader(
         dataset=ds_val,
-        batch_size=64,
-        num_workers=num_workers,
-        shuffle=True,
+        batch_size=batch_size,
+        #num_workers=num_workers,
+        shuffle=False,
         drop_last=True,
     )
     
     dl_test = DataLoader(
         dataset=ds_test,
-        batch_size=9,
-        num_workers=num_workers,
+        batch_size=16,
+        #num_workers=num_workers,
         shuffle=False,
         drop_last=True,
     )
-    torch.set_default_dtype(torch.float64)
+    
     enc_hidden_sizes = [16, 16, 32, 64, 128]
     dec_hidden_sizes = [16, 64, 256, 512, 1024]
-    model_save_path=os.path.join("tb_logs", f"HQA3_Sig_1D_4096_2Res_1R_KL_C_Classes6_e{EPOCHS}.pt")
-   
-    for i in range(2): #changed from five for  faster evaluation
+    model_save_path=os.path.join('Saved_models', f"HQA_Sig_1D_iq{num_iq_samples}_{layers}layer_res{num_res_blocks}_Cos{Cos_coeff}_KL{KL_coeff}_C{CL_coeff}_Classes6_e{EPOCHS}.ckpt")
+    
+    for i in range(layers): #changed from five for  faster evaluation
+        print(f'training Layer {i}')
+        print('==============================================')
         if i == 0:
             hqa = HQA.init_bottom(
                 input_feat_dim=2,
                 enc_hidden_dim=enc_hidden_sizes[i],
                 dec_hidden_dim=dec_hidden_sizes[i],
-                num_res_blocks=2
+                num_res_blocks=num_res_blocks,
+                KL_coeff = KL_coeff,
+                CL_coeff = CL_coeff,
+                Cos_coeff = Cos_coeff,
+
             )
         else:
             hqa = HQA.init_higher(
                 hqa_prev,
                 enc_hidden_dim=enc_hidden_sizes[i],
                 dec_hidden_dim=dec_hidden_sizes[i],
-                num_res_blocks=2
+                num_res_blocks=num_res_blocks,
+                KL_coeff = KL_coeff,
+                CL_coeff = CL_coeff,
+                Cos_coeff = Cos_coeff,
             )
-        logger = TensorBoardLogger("tb_logs", name=f"HQA2o_Sig_1D_4096_2Res_1R_KL_C_Classes6_e{EPOCHS}_{i}")
-
-
+        logger = TensorBoardLogger("tb_logs/HQA_1D", name=f"HQA_Sig_1D_iq{num_iq_samples}_{i+1}th_layer_res{num_res_blocks}_Cos{Cos_coeff}_KL{KL_coeff}_C{CL_coeff}_Classes6_e{EPOCHS}")
 
         trainer = pl.Trainer(max_epochs=EPOCHS, 
              logger=logger,  
-             #devices=[1],
-             #accelerator = 'gpu'
-             strategy=DDPStrategy(find_unused_parameters=True)
+             devices=[0],
+             accelerator = 'gpu',
+             num_sanity_val_steps=0
         )
 
         #trainer.fit(model=hqa, train_dataloaders=dl_train, val_loaders=dl_val)
-        trainer.fit(hqa, dl_train, dl_val)
+        trainer.fit(hqa.double(), dl_train, dl_val)
         hqa_prev = hqa
-    torch.save(hqa, model_save_path)  
-  
+        torch.save(hqa, model_save_path)  
+        print(f'saved the model as {model_save_path}')
+        print('==========================================')
     hqa_model = torch.load(model_save_path)
 
-    for i in range(2): #changed from five for  faster evaluation
+    for i in range(layers): #changed from five for  faster evaluation
         hqa=hqa_model[i]
         test_x, lab = next(iter(dl_test))
         hqa.eval()
@@ -166,7 +184,7 @@ if __name__ == '__main__':
             plt.xticks([])
             plt.yticks([])
             plt.title(str(lab[k]))
-        figure1.savefig(f'spectr2oKL{i}{k}_e{EPOCHS}.png')            
+        figure1.savefig(f'Visuals/spectr2oKL{i}{k}_e{EPOCHS}.png')            
         figure2 = plt.figure(2)    
         for k in range(batch_size):
             test_yiq=test_y[k,:,:]
@@ -195,7 +213,7 @@ if __name__ == '__main__':
             plt.xticks([])
             plt.yticks([])
             plt.title(str(lab[k]))
-        figure2.savefig(f'spectr2oKL_hat{i}{k}_e{EPOCHS}.png')
+        figure2.savefig(f'Visuals/spectr2oKL_hat{i}{k}_e{EPOCHS}.png')
         figure3 = plt.figure(3) 
         for k in range(batch_size):
             test_xiq = test_x.detach().cpu().numpy()[k,:,:]
@@ -210,7 +228,7 @@ if __name__ == '__main__':
             plt.xticks([])
             plt.yticks([])
             plt.title(str(lab[k]))
-        figure3.savefig(f'iq2oKL{i}{k}_e{EPOCHS}.png')
+        figure3.savefig(f'Visuals/iq2oKL{i}{k}_e{EPOCHS}.png')
         figure4 = plt.figure(4) 
         for k in range(batch_size):
             test_yiq=test_y[k,:,:]
@@ -225,5 +243,5 @@ if __name__ == '__main__':
             plt.xticks([])
             plt.yticks([])
             plt.title(str(lab[k]))
-        figure4.savefig(f'iq2oKL_hat{i}{k}_e{EPOCHS}.png')
+        figure4.savefig(f'Visuals/iq2oKL_hat{i}{k}_e{EPOCHS}.png')
     plt.close('all')

@@ -16,7 +16,7 @@ import torchvision.transforms.functional as TF
 import scipy.fftpack as fp
 
 #device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-device = "cuda:1" if torch.cuda.is_available() else "cpu"
+device = "cuda:0" if torch.cuda.is_available() else "cpu"
 DISTRIBUTED = False
 if DISTRIBUTED:
     device = 0

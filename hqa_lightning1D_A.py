@@ -544,11 +544,11 @@ if __name__ == '__main__':
         ]
     )
     batch_size = 512
-    ds_train = MNIST('/tmp/mnist', download=True, transform=transform)
-    dl_train = DataLoader(ds_train, batch_size=batch_size, shuffle=True, num_workers=4)
+    ds_train = MNIST('/tmp/mnist', download=False, transform=None)
+    dl_train = DataLoader(ds_train, batch_size=batch_size, shuffle=True, num_workers=15)
 
-    ds_test = MNIST('/tmp/mnist_test_', download=True, train=False, transform=transform)
-    dl_test = DataLoader(ds_test, batch_size=batch_size, num_workers=4)
+    ds_test = MNIST('/tmp/mnist_test_', download=False, train=False, transform=None)
+    dl_test = DataLoader(ds_test, batch_size=batch_size, num_workers=15)
 
     enc_hidden_sizes = [16, 16, 32, 64, 128]
     dec_hidden_sizes = [16, 64, 256, 512, 1024]
