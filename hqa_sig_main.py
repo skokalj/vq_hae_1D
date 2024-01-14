@@ -32,16 +32,16 @@ if __name__ == '__main__':
     valid_samples_per_class = 1000
     test_samples_per_class = 1000
     num_workers=15
-    EPOCHS=10
+    EPOCHS=50
     num_iq_samples = 4096
-    layers = 5
+    layers = 2
     num_res_blocks = 2
     KL_coeff =  0.2
     CL_coeff = 0.001
     Cos_coeff = 0.7
     torch.set_default_dtype(torch.float64)
     batch_size = 32
-
+    codebook_visuals_dir = f'Visuals_cb_HQA_Sig_1D_iq{num_iq_samples}_{layers}layer_res{num_res_blocks}_Cos{Cos_coeff}_KL{KL_coeff}_C{CL_coeff}_Classes6_e{EPOCHS}'
 
     data_transform = ST.Compose([
         ST.Normalize(norm=np.inf),
@@ -120,7 +120,7 @@ if __name__ == '__main__':
                 KL_coeff = KL_coeff,
                 CL_coeff = CL_coeff,
                 Cos_coeff = Cos_coeff,
-
+                output_dir = codebook_visuals_dir,
             )
         else:
             hqa = HQA.init_higher(
@@ -131,8 +131,9 @@ if __name__ == '__main__':
                 KL_coeff = KL_coeff,
                 CL_coeff = CL_coeff,
                 Cos_coeff = Cos_coeff,
+                output_dir = codebook_visuals_dir,
             )
-        logger = TensorBoardLogger("tb_logs/HQA_1D", name=f"HQA_Sig_1D_iq{num_iq_samples}_{i+1}th_layer_res{num_res_blocks}_Cos{Cos_coeff}_KL{KL_coeff}_C{CL_coeff}_Classes6_e{EPOCHS}")
+        logger = TensorBoardLogger("tb_logs/HQA_1D", name=f"HQA_Sig_1D_iq{num_iq_samples}_{i+1}by{layers}_layer_res{num_res_blocks}_Cos{Cos_coeff}_KL{KL_coeff}_C{CL_coeff}_Classes6_e{EPOCHS}")
 
         trainer = pl.Trainer(max_epochs=EPOCHS, 
              logger=logger,  

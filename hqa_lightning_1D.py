@@ -550,6 +550,7 @@ class HQA(pl.LightningModule):
     def __getitem__(self, idx):
         max_layer = len(self) - 1
         if idx > max_layer:
+            print(idx[0])
             raise IndexError("layer does not exist")
 
         layer = self

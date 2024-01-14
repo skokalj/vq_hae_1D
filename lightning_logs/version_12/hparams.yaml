@@ -1,0 +1,16 @@
+CL_coeff: 0.001
+Cos_coeff: 0.7
+KL_coeff: 0.2
+clip_grads: false
+codebook_dim: 256
+codebook_init: normal
+codebook_slots: 256
+dec_hidden_dim: 64
+decay: true
+enc_hidden_dim: 16
+gs_temp: 0.667
+input_feat_dim: 256
+layer: 0
+lr: 0.0004
+num_res_blocks: 2
+output_dir: Visuals_cb_HQA_Sig_1D_iq4096_2layer_res2_Cos0.7_KL0.2_C0.001_Classes6_e50

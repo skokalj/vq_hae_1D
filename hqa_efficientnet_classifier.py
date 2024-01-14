@@ -39,7 +39,7 @@ from torchvision import transforms
 import lightning.pytorch as pl
 from lightning.pytorch.loggers import TensorBoardLogger
 from lightning.pytorch.strategies.ddp import DDPStrategy
-
+from torchsummary import summary
 from scipy import interpolate
 from scipy import signal as sp
 
@@ -53,8 +53,8 @@ num_classes = len(classes)
 training_samples_per_class = 4000
 valid_samples_per_class = 1000
 test_samples_per_class = 1000
-num_workers=32
-
+num_workers=15
+torch.set_default_dtype(torch.float32)
 data_transform = ST.Compose([
     ST.Normalize(norm=np.inf),
     ST.ComplexTo2D(),
@@ -95,25 +95,25 @@ ds_test = ModulationsDataset(
 train_dataloader = DataLoader(
     dataset=ds_train,
     batch_size=16,
-    num_workers=num_workers,
+    #num_workers=num_workers,
     shuffle=True,
     drop_last=True,
 )
 val_dataloader = DataLoader(
     dataset=ds_val,
     batch_size=16,
-    num_workers=num_workers,
+    #num_workers=num_workers,
     shuffle=True,
     drop_last=True,
 )
 test_dataloader = DataLoader(
     dataset=ds_test,
     batch_size=64,
-    num_workers=num_workers,
+    #num_workers=num_workers,
     shuffle=False,
     drop_last=True,
 )
-torch.set_default_dtype(torch.float32)
+torch.set_default_dtype(torch.float64)
 model_save_path=os.path.join("tb_logs", f"EfficientNet_Classes6_e{EPOCHS}.pt")
    
 
@@ -130,7 +130,7 @@ model = efficientnet_b4(
     pretrained=pretrained,
     path="tb_logs/efficientnet_b4.pt",
 )
-
+#print(pretrained)
 #device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 #model = model.to(device)
 
@@ -147,6 +147,7 @@ class ExampleNetwork(LightningModule):
         self.batch_size = data_loader.batch_size
 
     def forward(self, x: torch.Tensor):
+        #print(x.shape)
         return self.mdl(x.float())
 
     def predict(self, x: torch.Tensor):
@@ -194,15 +195,17 @@ checkpoint_callback = ModelCheckpoint(
     monitor="val_loss",
     mode="min",
 )
-logger = TensorBoardLogger('tb_logs/efficientNet',name=f'efficientNet_1D_{EPOCHS}')
 
 # Create and fit trainer
 trainer = Trainer(
-    max_epochs=EPOCHS, callbacks=checkpoint_callback, devices=1, accelerator="gpu",logger=None
+    max_epochs=EPOCHS, callbacks=checkpoint_callback, devices=1, accelerator="gpu"
 )
-trainer.fit(example_model, train_dataloader, val_dataloader) 
+#print(example_model)
 
+#trainer.fit(example_model, train_dataloader, val_dataloader) 
+summary(example_model)
 
+'''
 # ----
 # ### Evaluate the Trained Model
 # After the model is trained, the checkpoint's weights are loaded into the model and the model is put into evaluation mode. The validation set is looped through, inferring results for each example and saving the predictions and the labels. Finally, the labels and predictions are passed into our confusion matrix plotting function to view the results and also passed into the `sklearn.metrics.classification_report` method to print metrics of interest.
@@ -300,3 +303,4 @@ for j in range(1): #changed from five for  faster evaluation
     print(classification_report(y_true, y_preds))
 
 
+'''
