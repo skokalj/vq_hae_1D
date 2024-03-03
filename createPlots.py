@@ -61,13 +61,13 @@ def plot_heirarchical_model(heirarchical_model, name, classifier, test_dataloade
     compression_ratios = np.zeros(num_layers)
     accuracies = np.zeros(num_layers)
     for j in range(5):
-        y_preds = np.zeros((1000*6,)) #0's of length dataset size
-        y_true = np.zeros((1000*6,)) 
+        y_preds = np.zeros((len(ds_test),)) #0's of length dataset size
+        y_true = np.zeros((len(ds_test),)) 
         hqa=heirarchical_model[j]
         hqa = hqa.float().to(device)
         hqa.eval()
         print(f"Layer {j}")
-        for i in tqdm(range(0, 1000*6)):
+        for i in tqdm(range(0, len(ds_test))):
             idx = i  
             data, label = ds_test[idx]
             test_x = hqa.reconstruct(torch.from_numpy(np.expand_dims(data, 0)).float().to(device))
