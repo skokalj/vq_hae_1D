@@ -13,8 +13,7 @@ import torchsig.transforms as ST
 import lightning.pytorch as pl
 from lightning.pytorch.loggers import TensorBoardLogger
 from lightning.pytorch.strategies.ddp import DDPStrategy
-#from hae_lightning_1D import HQA
-from hqa_lightning_1D import HQA
+from hae_lightning_1D import HQA
 from scipy import interpolate
 from scipy import signal as sp
 from torchsummary import summary
@@ -41,9 +40,6 @@ def parse_args():
 
 if __name__ == '__main__':
     args = parse_args()
-    #torch.set_float32_matmul_precision('medium')
-    #torch.set_default_dtype(torch.float32)
-    #classes = ["bpsk","8pam","8psk","16qam","16pam","64qam","64psk","256qam","1024qam","16gmsk"]
     classes = ["4ask","8pam","16psk","32qam_cross","2fsk","ofdm-256"]
     num_classes = len(classes)
     training_samples_per_class = 4000
@@ -68,10 +64,9 @@ if __name__ == '__main__':
     compress = args.compress
     
     
-    codebook_visuals_dir = f'Codebook_visualizations/{compress}C_mod_No_norm_Visuals_HQA_Sig_1D_{codebook_init}_BN{batch_norm}_reset{reset_choice}_res{num_res_blocks}_cosReset{cos_reset}_Cos{Cos_coeff}_KL{KL_coeff}_C{CL_coeff}_Classes6_e{EPOCHS}_iq{num_iq_samples}_codebookSlots{codebook_slots}_codebookDim{codebook_dim}_{layers}layer/version_{version}'
+    codebook_visuals_dir = f'Codebook_visualizations/{compress}CNo_norm_Visuals_HAE_Sig_1D_{codebook_init}_BN{batch_norm}_reset{reset_choice}_res{num_res_blocks}_cosReset{cos_reset}_Cos{Cos_coeff}_KL{KL_coeff}_C{CL_coeff}_Classes6_e{EPOCHS}_iq{num_iq_samples}_codebookSlots{codebook_slots}_codebookDim{codebook_dim}_{layers}layer/version_{version}'
 
 
-    #torch.set_default_dtype(torch.float64)
     batch_size = 64
 
     print(f'EPOCHS : {EPOCHS}')
@@ -156,13 +151,7 @@ if __name__ == '__main__':
 
     model_save_path=os.path.join(f'Saved_models/HAE/', f"{compress}C_mod_No_Norm_HAE_Sig_1D_{codebook_init}_BN{batch_norm}_reset{reset_choice}_res{num_res_blocks}_cosReset{cos_reset}_Cos{Cos_coeff}_KL{KL_coeff}_C{CL_coeff}_Classes6_e{EPOCHS}_iq{num_iq_samples}_codebookSlots{codebook_slots}_codebookDim{codebook_dim}_{layers}layer_version_{version}.ckpt")
     
-    hae_model = torch.load(model_save_path)
-    
-    if os.path.exists(model_save_path):
-        print("loaded existing HAE")
-        model_save_path = os.path.join(f'Saved_models/HQA/', f"{compress}C_mod_No_Norm_HQA_Sig_1D_{codebook_init}_BN{batch_norm}_reset{reset_choice}_res{num_res_blocks}_cosReset{cos_reset}_Cos{Cos_coeff}_KL{KL_coeff}_C{CL_coeff}_Classes6_e{EPOCHS}_iq{num_iq_samples}_codebookSlots{codebook_slots}_codebookDim{codebook_dim}_{layers}layer_version_{version}.ckpt")
-    
-    
+
     for i in range(layers): 
         print(f'training Layer {i}')
         print('==============================================')
@@ -205,21 +194,20 @@ if __name__ == '__main__':
                 cos_reset = cos_reset,
                 compress = compress
             )
-        hqa.encoder = hae_model[i].encoder
-        hqa.decoder = hae_model[i].decoder
         print("loaded the encoder and decoder pretrained models")
-        logger = TensorBoardLogger(f"tb_logs", name=f"{compress}C_mod_No_Norm_HQA_Sig_1D_{codebook_init}_BN{batch_norm}_reset{reset_choice}_res{num_res_blocks}_cosReset{cos_reset}_Cos{Cos_coeff}_KL{KL_coeff}_C{CL_coeff}_Classes6_e{EPOCHS}_iq{num_iq_samples}_codebookSlots{codebook_slots}_codebookDim{codebook_dim}_{layers}layer_version_{version}")
+        logger = TensorBoardLogger(f"tb_logs", name=f"{compress}C_mod_No_Norm_HAE_Sig_1D_{codebook_init}_BN{batch_norm}_reset{reset_choice}_res{num_res_blocks}_cosReset{cos_reset}_Cos{Cos_coeff}_KL{KL_coeff}_C{CL_coeff}_Classes6_e{EPOCHS}_iq{num_iq_samples}_codebookSlots{codebook_slots}_codebookDim{codebook_dim}_{layers}layer_version_{version}")
         
         trainer = pl.Trainer(max_epochs=EPOCHS, 
-             logger=None,  
+             logger=logger,  
              devices=1,
              accelerator = 'gpu',
              num_sanity_val_steps=0,
         )
-        #hqa = hqa_model[i]
         trainer.fit(hqa.float(), dl_train, dl_val)
         hqa_prev = hqa.eval()
         torch.save(hqa, model_save_path)  
         print(f'saved the model as {model_save_path}')
         print('==========================================')
+    #hqa_model = torch.load(model_save_path)
+    #print(summary(hqa.to(device='cuda'),(2,1024),16),device='cuda')
 
