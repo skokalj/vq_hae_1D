@@ -14,7 +14,7 @@ import lightning.pytorch as pl
 from lightning.pytorch.loggers import TensorBoardLogger
 from lightning.pytorch.strategies.ddp import DDPStrategy
 #from hae_lightning_1D import HQA
-from hqa_lightning_1D import HQA
+from hqa_lightning1D import HQA
 from scipy import interpolate
 from scipy import signal as sp
 from torchsummary import summary

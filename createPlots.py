@@ -43,7 +43,7 @@ import torchsig.transforms as ST
 import lightning.pytorch as pl
 from lightning.pytorch.loggers import TensorBoardLogger
 from lightning.pytorch.strategies.ddp import DDPStrategy
-from hqa_lightning_1D import HQA
+from hqa_lightning1D import HQA
 from scipy import signal as sp
 import matplotlib.pyplot as plt
 import copy
@@ -129,15 +129,15 @@ if __name__ == '__main__':
     MODEL_NAME = "[2024-02-12 16:31:32]HAE_64_5layers_0.70cos_lNonenorm.pt"   
     cb_init = 'normal'
     
-    hqa_save_paths= ["[2024-02-12 16:31:32]HAE_64_5layers_0.70cos_lNonenorm.pt",
-                    "Saved_models/HQA/best_NO_KL_64_64.ckpt",
-                    "Saved_models/HQA/best_KL_64_64.ckpt"]
+    hqa_save_paths= ["checkpoints/[2024-03-01 16_33_53]HAE_64_5layers_0.70cos_lNonenorm.pt",
+                    "checkpoints/[2024-03-03 00_00_12]HQA_64_5layers_0.70cos_lNonenorm.pt",
+                    "checkpoints/DS_best_NO_KL_64_64.ckpt"]
     
     
     
     models = ["HAE",
-              "HQARF_NO_KL",
-              "HQARF"]
+              "HQARF",
+              "HQARF_NO_KL"]
     '''
     models = ["HAE"]
     hqa_save_paths= ["[2024-02-12 16:31:32]HAE_64_5layers_0.70cos_lNonenorm.pt",

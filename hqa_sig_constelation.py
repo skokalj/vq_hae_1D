@@ -7,7 +7,7 @@ import torchsig.transforms as ST
 import lightning.pytorch as pl
 from lightning.pytorch.loggers import TensorBoardLogger
 from lightning.pytorch.strategies.ddp import DDPStrategy
-from hqa_lightning_1D import HQA
+from hqa_lightning1D import HQA
 from scipy import signal as sp
 import matplotlib.pyplot as plt
 import copy
