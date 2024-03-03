@@ -86,7 +86,6 @@ if __name__ == '__main__':
     print(f'compression  : {compress}')
     
     data_transform = ST.Compose([
-        #ST.Normalize(norm=np.inf),
         ST.ComplexTo2D(),
     ])
 
@@ -125,7 +124,6 @@ if __name__ == '__main__':
     dl_train = DataLoader(
         dataset=ds_train,
         batch_size=batch_size,
-        #num_workers=num_workers,
         shuffle=True,
         drop_last=True,
     )
@@ -133,7 +131,6 @@ if __name__ == '__main__':
     dl_val = DataLoader(
         dataset=ds_val,
         batch_size=batch_size,
-        #num_workers=num_workers,
         shuffle=False,
         drop_last=True,
     )
@@ -141,7 +138,6 @@ if __name__ == '__main__':
     dl_test = DataLoader(
         dataset=ds_test,
         batch_size=16,
-        #num_workers=num_workers,
         shuffle=False,
         drop_last=True,
     )
@@ -208,6 +204,6 @@ if __name__ == '__main__':
         torch.save(hqa, model_save_path)  
         print(f'saved the model as {model_save_path}')
         print('==========================================')
-    #hqa_model = torch.load(model_save_path)
+    hqa_model = torch.load(model_save_path)
     #print(summary(hqa.to(device='cuda'),(2,1024),16),device='cuda')
 

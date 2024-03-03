@@ -72,7 +72,7 @@ class Encoder(nn.Module):
         for _ in range(num_res_blocks):
             blocks.append(ResBlock(hidden_dim, hidden_dim // 2))
             if batch_norm == 2:
-                blocks.append(nn.BatchNorm1d(hiddern_dim))
+                blocks.append(nn.BatchNorm1d(hidden_dim))
 
         blocks.append(nn.Conv1d(hidden_dim, codebook_dim, kernel_size=1))
         if(batch_norm):
@@ -84,7 +84,7 @@ class Encoder(nn.Module):
         return self.blocks(x)
 
 class Encoder2(nn.Module):
-    """ Downsamples by a fac of 2 """
+    """ Downsamples by a fac of 4 """
     def __init__(self, in_feat_dim, codebook_dim, hidden_dim=128, num_res_blocks=0,batch_norm=1):
         super().__init__()
         blocks = [
@@ -97,7 +97,7 @@ class Encoder2(nn.Module):
         for _ in range(num_res_blocks):
             blocks.append(ResBlock(hidden_dim, hidden_dim // 2))
             if batch_norm==2:
-                blocks.append(nn.BatchNorm1d(hiddern_dim))
+                blocks.append(nn.BatchNorm1d(hidden_dim))
         blocks.append(nn.Conv1d(hidden_dim, codebook_dim, kernel_size=1))
 
         if(batch_norm):

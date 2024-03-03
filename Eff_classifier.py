@@ -228,28 +228,13 @@ example_model = ExampleNetwork(model, train_dataloader, val_dataloader)
 example_model = example_model.float().to(device)
 
 
-# ----
-# ### Train the Model
-# To train the model, we first create a `ModelCheckpoint` to monitor the validation loss over time and save the best model as we go. The network is then instantiated and passed into a `Trainer` to kick off training.
-
-# Setup checkpoint callbacks
-'''
-checkpoint_filename = "{}/tb_logs/checkpoints/checkpoint".format(os.getcwd())
-checkpoint_callback = ModelCheckpoint(
-    filename=checkpoint_filename,
-    save_top_k=True,
-    monitor="val_loss",
-    mode="min",
-)
-'''
-# Create and fit trainer
+# Create and fit trainer for Efficient Net
 trainer = Trainer(
     max_epochs=EFF_EPOCHS, 
     #callbacks=checkpoint_callback, 
     devices=1, accelerator="gpu"
 )
-#print(example_model)
-#trainer.fit(example_model, train_dataloader, val_dataloader) 
+
 PATH = f'6Class_efficientNet_epochs_noNorm{EFF_EPOCHS}.pt'
 
 #torch.save(example_model.state_dict(),PATH)
