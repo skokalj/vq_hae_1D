@@ -1,16 +1,10 @@
 import torch
-import os
 from torch.utils.data import DataLoader, Subset
 import numpy as np
 from torchsig.datasets.modulations import ModulationsDataset
 import torchsig.transforms as ST
 import lightning.pytorch as pl
-from lightning.pytorch.loggers import TensorBoardLogger
-from lightning.pytorch.strategies.ddp import DDPStrategy
-from hqa_lightning1D import HQA
-from scipy import signal as sp
 import matplotlib.pyplot as plt
-import copy
 
 if __name__ == '__main__':
     torch.set_default_dtype(torch.float32)

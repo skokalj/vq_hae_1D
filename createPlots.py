@@ -1,52 +1,25 @@
 import torch
-import os
-from torchsig.transforms.target_transforms import DescToClassIndex
 from torchsig.models.iq_models.efficientnet.efficientnet import efficientnet_b4
-from torchsig.transforms.transforms import (
-    RandomPhaseShift,
-    Normalize,
-    ComplexTo2D,
-    Compose,
-)
-from pytorch_lightning.callbacks import ModelCheckpoint
-from pytorch_lightning import LightningModule, Trainer
-from sklearn.metrics import classification_report
-from torchsig.utils.cm_plotter import plot_confusion_matrix
+from pytorch_lightning import LightningModule
 from torchsig.datasets.modulations import ModulationsDataset
 from torch.utils.data import DataLoader
 from matplotlib import pyplot as plt
-from torchsig.datasets import conf
 from torch import optim
 from tqdm import tqdm
 import torch.nn.functional as F
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
-from utils import *
-import pandas as pd
-from load_datasets import load_sig 
-from torchsig.utils.dataset import SignalFileDataset
 from torchsig.datasets.modulations import ModulationsDataset
 import torchsig.transforms as ST
-from torchvision import transforms
 import lightning.pytorch as pl
-from lightning.pytorch.loggers import TensorBoardLogger
-from lightning.pytorch.strategies.ddp import DDPStrategy
 
-from scipy import interpolate
-from scipy import signal as sp
-import argparse
-from torch.utils.data import DataLoader, Subset
+from torch.utils.data import DataLoader
 import numpy as np
 from torchsig.datasets.modulations import ModulationsDataset
 import torchsig.transforms as ST
 import lightning.pytorch as pl
-from lightning.pytorch.loggers import TensorBoardLogger
-from lightning.pytorch.strategies.ddp import DDPStrategy
-from hqa_lightning1D import HQA
-from scipy import signal as sp
 import matplotlib.pyplot as plt
-import copy
 from tqdm import tqdm
 
 def compression_ratio(layer_index):
@@ -54,7 +27,7 @@ def compression_ratio(layer_index):
     return 1.37 * np.power(2, layer_index)
 
 def plot_heirarchical_model(heirarchical_model, name, classifier, test_dataloader,ds_test):
-    original_size = ds_test[0][0].size
+    ds_test[0][0].size
     num_layers = len(heirarchical_model)
     compression_ratios = np.zeros(num_layers)
     accuracies = np.zeros(num_layers)

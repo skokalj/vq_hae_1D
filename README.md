@@ -1,8 +1,8 @@
-# Hierarchical Quantized Autoencoders (HQA) Research
+# Compressing Radio-Frequency Signals with Hierarchical Quantized Autoencoders
 
 This repository is the code accompanying the paper [Deep-Learned Compression for Radio-Frequency Signal Classification](https://arxiv.org/abs/2403.03150). 
 
-It is maintained by the Rowan University Artificial Intelligence and Signal Processing Research Lab.
+It is maintained by the Rowan University Artificial Intelligence Lab for Signals and Systems.
 
 ## Requirements:
 
@@ -15,8 +15,8 @@ To get started with this repository, follow these instructions:
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/your-repository.git
-   cd your-repository
+   git clone https://github.com/skokalj/vq_hae_1D.git
+   cd vq_hae_1D
     ```
 2. Install requirements
     ```bash
