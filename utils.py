@@ -266,7 +266,7 @@ def recon_comparison(model, ds_test, names, descriptions, img_save_dir, is_tiled
 
     #import ipdb; ipdb.set_trace()
     print("Original images to be reconstructed")
-    output = np.hstack(images)
+    np.hstack(images)
     #show_image(output)
 
     for layer, name, description in zip(model, names, descriptions):
@@ -313,7 +313,7 @@ def recon_comparison(model, ds_test, names, descriptions, img_save_dir, is_tiled
             #print(os.path.getsize(os.path.join(jpg_path, f"img{label}_{idx}.jpeg")))
     
         print(f"{name}: {description}")
-        output = np.hstack(images)
+        np.hstack(images)
         #show_image(output)
 
 
@@ -350,8 +350,8 @@ def test(model, dl_test):
     kl_mean = np.mean(total_kl)
     nll_mean = np.mean(total_nll)
     distortion_bpd = nll_mean / dims / np.log(2)
-    rate_bpd = kl_mean / dims / np.log(2)
-    elbo = -(nll_mean + kl_mean)
+    kl_mean / dims / np.log(2)
+    -(nll_mean + kl_mean)
     
     rate_bound = get_rate_upper_bound(model, img[0].unsqueeze(0))
     
@@ -372,7 +372,7 @@ def get_rd_data(model, dl_test):
 
 # Layer-wise interpolations
 def interpolate(a, b, ds_test, vqvae, grid_x=16):
-    images = []
+    pass
     
     x_a,_ = ds_test[a]
     x_b,_ = ds_test[b]

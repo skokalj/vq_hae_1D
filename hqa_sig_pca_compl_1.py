@@ -1,19 +1,10 @@
 import torch
-import os
 from torch.utils.data import DataLoader
 import numpy as np
 from torchsig.datasets.modulations import ModulationsDataset
 import torchsig.transforms as ST
 import lightning.pytorch as pl
-from lightning.pytorch.loggers import TensorBoardLogger
-from lightning.pytorch.strategies.ddp import DDPStrategy
-from hqa_lightning1D import HQA
-from scipy import signal as sp
-import matplotlib.pyplot as plt
-import copy
         
-from sklearn.preprocessing import StandardScaler
-from sklearn.decomposition import PCA
 
 def pca(X):
     _, stds, pcs = np.linalg.svd(X/np.sqrt(X.shape[0])) 
@@ -21,12 +12,13 @@ def pca(X):
     return stds**2, pcs
 
 if __name__ == '__main__':
-    #torch.set_float32_matmul_precision('medium')
-    #classes = ["bpsk","8pam","8psk","16qam","16pam","64qam","64psk","256qam","1024qam","16gmsk"]
+    pl.seed_everything(1234567891)
     torch.set_default_dtype(torch.float32)
-    classes = ["4ask","8pam","16psk","32qam_cross","2fsk","ofdm-256"]
+
+    #classes = ["4ask","8pam","16psk","32qam_cross","2fsk","ofdm-256"]
     classes = ["32qam_cross"]
     num_classes = len(classes)
+    
     training_samples_per_class = 4000
     valid_samples_per_class = 1000
     test_samples_per_class = 3000
@@ -38,13 +30,8 @@ if __name__ == '__main__':
     
     
 
-    data_transform = ST.Compose([
-        #ST.RayleighFadingChannel((.01, .1), power_delay_profile=(1.0, .7, .1)),
-        #ST.Normalize(norm=2, flatten=True),
-        #ST.ComplexTo2D(),
-    ])
 
-    pl.seed_everything(1234567891)
+    
     
    
     ds_test = ModulationsDataset(
@@ -53,8 +40,7 @@ if __name__ == '__main__':
         level=0,
         num_iq_samples=1024,
         num_samples=int(num_classes*test_samples_per_class),
-        include_snr=False,
-        transform = data_transform
+        include_snr=False
     )
 
   

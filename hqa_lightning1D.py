@@ -1,6 +1,5 @@
 import math
 
-import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -9,18 +8,11 @@ import os
 import torch
 import torch.nn.functional as F
 from torch import nn
-from torch.utils.data import DataLoader
-from torch.distributions import RelaxedOneHotCategorical, Normal, Categorical
+from torch.distributions import RelaxedOneHotCategorical, Categorical
 from torch.optim.lr_scheduler import _LRScheduler
-from torch.optim.optimizer import Optimizer
 
-from torchvision import transforms
-from torchvision.datasets import MNIST
 
 import lightning.pytorch as pl
-from lightning.pytorch.loggers import TensorBoardLogger
-from torch.nn import GELU
-from utils import *
 from sklearn.manifold import TSNE
 
 
@@ -497,7 +489,7 @@ class HQA(pl.LightningModule):
                 tsne = self.visualize_codebook()
                 df = pd.DataFrame(tsne,
                     columns=['tsne-2d-one', 'tsne-2d-two'])
-                y = [i for i in range(len(df))]
+                [i for i in range(len(df))]
 
                 plt.figure(figsize=(16,10))
                 scplot=sns.scatterplot(
